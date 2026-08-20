@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RailTrack Enterprise - Railway Asset Integrity & Track Defect Monitoring</title>
+  
+  <!-- Leaflet GIS Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <!-- Google Fonts: Inter & JetBrains Mono for Tabular Data -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Main Top Navigation & System Status Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="app-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+            <line x1="4" y1="22" x2="4" y2="15"/>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <span class="brand-title">RailTrack™ Enterprise</span>
+          <span class="brand-sub">Linear Infrastructure Asset Integrity Portal</span>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Bar -->
+      <div class="header-metrics">
+        <div class="metric-item">
+          <span class="metric-label">Monitored Track</span>
+          <span class="metric-val" id="metric-total-km">1,485.0 km</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">P1 Critical Defects</span>
+          <span class="metric-val critical" id="metric-p1-count">2</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">P2 Warnings</span>
+          <span class="metric-val warning" id="metric-p2-count">2</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">System Health</span>
+          <span class="metric-val success" id="metric-health">97.4%</span>
+        </div>
+      </div>
+
+      <!-- Header Actions -->
+      <div class="header-actions">
+        <button id="btn-simulate-event" class="btn btn-secondary btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Simulate Telemetry Anomaly
+        </button>
+
+        <button id="btn-reset-data" class="btn btn-ghost btn-sm" title="Reset Dataset">
+          Reset View
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="main-body">
+      <!-- Left Sidebar: Track Anomaly Directory -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <div class="sidebar-title-row">
+            <h2>Track Anomaly Log</h2>
+            <span class="count-badge" id="anomaly-count-badge">4 Records</span>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="search-box">
+            <input type="text" id="defect-search" placeholder="Search track segment, chainage, or defect type..." />
+          </div>
+
+          <div class="filter-pills">
+            <button class="pill active" data-filter="all">All (5)</button>
+            <button class="pill pill-p1" data-filter="p1">P1 Critical (2)</button>
+            <button class="pill pill-p2" data-filter="p2">P2 Warning (2)</button>
+            <button class="pill pill-clear" data-filter="clear">Clear (1)</button>
+          </div>
+        </div>
+
+        <!-- Defect Cards List -->
+        <div class="defect-list" id="defect-list-container">
+          <!-- Dynamic cards injected here -->
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="inspection-unit-status">
+            <span class="status-indicator active"></span>
+            <span>UT Inspection Car #UT-02 Active</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center GIS Map View -->
+      <section class="map-container-section">
+        <div class="map-toolbar">
+          <div class="map-legend">
+            <span class="legend-chip p1"><span class="dot"></span> P1 - Emergency Fracture</span>
+            <span class="legend-chip p2"><span class="dot"></span> P2 - Track Alignment Warning</span>
+            <span class="legend-chip clear"><span class="dot"></span> Clear Track</span>
+          </div>
+          
+          <div class="map-controls-group">
+            <button id="btn-map-focus-p1" class="btn btn-secondary btn-xs">Center P1 Defect</button>
+            <button id="btn-toggle-satellite" class="btn btn-ghost btn-xs">Toggle Satellite Base</button>
+          </div>
+        </div>
+
+        <div id="gis-map"></div>
+
+        <!-- Floating Notification Banner -->
+        <div class="notification-toast hidden" id="toast-banner">
+          <div class="toast-indicator"></div>
+          <div class="toast-body">
+            <div class="toast-title" id="toast-title">New Track Anomaly Detected</div>
+            <div class="toast-desc" id="toast-desc">Segment SEG-NR-142 | Chainage KM 142+500</div>
+          </div>
+          <button class="toast-btn" id="toast-action-btn">View Record</button>
+        </div>
+      </section>
+
+      <!-- Right Inspection Slide-Over Drawer (Enterprise Side Sheet Pattern) -->
+      <aside class="inspection-drawer hidden" id="inspection-drawer">
+        <div class="drawer-header">
+          <div class="drawer-title-group">
+            <span class="status-pill p1" id="drawer-priority-pill">P1 - EMERGENCY</span>
+            <h3 id="drawer-segment-id">Segment #SEG-NR-142</h3>
+          </div>
+          <button class="drawer-close-btn" id="drawer-close-btn" aria-label="Close Inspector">&times;</button>
+        </div>
+
+        <div class="drawer-content">
+          <!-- Track Defect Image Inspection Viewer -->
+          <div class="image-inspection-card">
+            <div class="image-header">
+              <span class="image-title">Track Instant Camera Frame</span>
+              <span class="image-timestamp" id="drawer-timestamp">2026-08-20 03:30:12 UTC</span>
+            </div>
+
+            <div class="image-wrapper">
+              <!-- Real Track Image Element -->
+              <img id="defect-img-element" src="" alt="Track Defect Inspection Photo" />
+              
+              <!-- SVG Bounding Box Annotation Layer -->
+              <svg id="annotation-svg" class="annotation-overlay" viewBox="0 0 640 400" preserveAspectRatio="none">
+                <rect id="svg-box" x="120" y="150" width="160" height="90" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="6,3"/>
+                <rect id="svg-label-bg" x="120" y="126" width="180" height="24" fill="#dc2626"/>
+                <text id="svg-label-text" x="128" y="142" fill="#ffffff" font-size="11" font-weight="bold" font-family="JetBrains Mono, monospace">RAIL FRACTURE [98.6%]</text>
+              </svg>
+            </div>
+
+            <div class="image-toolbar">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-toggle-annotations" checked />
+                <span>Show Bounding Box Annotations</span>
+              </label>
+
+              <button id="btn-full-res" class="btn btn-ghost btn-xs">
+                🔍 High Res View
+              </button>
+            </div>
+          </div>
+
+          <!-- Engineering Telemetry Details -->
+          <div class="telemetry-section">
+            <h4 class="section-heading">Defect Specification</h4>
+            <div class="defect-name" id="drawer-defect-name">Transverse Rail Fracture & Gap Separation</div>
+
+            <div class="data-table">
+              <div class="data-row">
+                <span class="data-label">Chainage / Milepost</span>
+                <span class="data-val" id="drawer-chainage">KM 142+500 (MP 88.5)</span>
+              </div>
+              <div class="data-row">
+                <span class="data-label">GPS Coordinates</span>
+                <span class="data-val font-mono" id="drawer-coords">28.6250° N, 77.2150° E</span>
+              </div>
+              <div class="data-row">
+                <span class="data-label">Rail Profile & Steel</span>
+                <span class="data-val" id="drawer-rail-spec">UIC 60 / 60E1 (Head Hardened)</span>
+              </div>
+              <div class="data-row">
+                <span class="data-label">Line Corridor</span>
+                <span class="data-val" id="drawer-corridor">Northern Mainline (Track 2 Up)</span>
+              </div>
+              <div class="data-row">
+                <span class="data-label">Inspection Source</span>
+                <span class="data-val" id="drawer-detector">Ultrasonic Inspection Car UT-02</span>
+              </div>
+              <div class="data-row">
+                <span class="data-label">Acoustic / Thermal</span>
+                <span class="data-val" id="drawer-sensor-reading">78.5 dB Anomaly / 38.5°C</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recommended Maintenance Protocol -->
+          <div class="protocol-box" id="protocol-box">
+            <div class="protocol-title">Safety Protocol & Action Directive</div>
+            <p class="protocol-desc" id="drawer-protocol">Immediate track block required. Temporary speed restriction TSR 0 km/h active until joint repair.</p>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="drawer-actions">
+            <button id="btn-dispatch-work-order" class="btn btn-danger btn-block">
+              Issue Emergency Work Order & Dispatch Crew
+            </button>
+            <button id="btn-export-pdf" class="btn btn-secondary btn-block">
+              Export Asset Incident Sheet (JSON)
+            </button>
+          </div>
+
+          <div class="dispatch-confirm hidden" id="dispatch-confirm-banner">
+            ✓ Work Order #WO-8910 Issued. Track Repair Unit 4 En Route.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Leaflet JS CDN -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
